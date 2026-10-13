@@ -1,0 +1,46 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      APP_ORIGIN: https://${DOMAIN:?Set DOMAIN in .env}
+      TRUST_PROXY: "1"
+      SEED_DEMO: "false"
+      DB_PATH: /app/data/community.sqlite
+    volumes:
+      - community_data:/app/data
+    expose:
+      - "3001"
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - internal
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - internal
+volumes:
+  community_data:
+  caddy_data:
+  caddy_config:
+networks:
+  internal:
