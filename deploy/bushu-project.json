@@ -1,0 +1,20 @@
+{
+  "work_dir": "/srv/dashui-club",
+  "checkout": false,
+  "compose_files": ["compose.cn.yaml"],
+  "reliable": {
+    "project_name": "dashui-club",
+    "services": ["app"],
+    "version_url": "http://127.0.0.1:3031/api/health",
+    "version_pointer": "/buildSha",
+    "data_compatible": true,
+    "health_timeout_seconds": 120,
+    "command_timeout_seconds": 300,
+    "consecutive_successes": 3,
+    "poll_interval_ms": 1000,
+    "retain_releases": 2,
+    "minimum_free_bytes": 5368709120,
+    "data_paths": ["/srv/dashui-club/data"],
+    "snapshot_files": []
+  }
+}

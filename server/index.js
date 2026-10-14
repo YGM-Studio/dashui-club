@@ -17,6 +17,12 @@ import { z } from "zod";
 import { db, userView, today, shiftDate, stats } from "./db.js";
 const scrypt = promisify(scryptCallback),
   prod = process.env.NODE_ENV === "production";
+if (prod) {
+  sharp.concurrency(1);
+  sharp.cache({ memory: 32, files: 0, items: 20 });
+}
+let activePhotoJobs = 0;
+const maxPhotoJobs = Math.max(1, Math.min(4, Number(process.env.PHOTO_CONCURRENCY) || 2));
 const digest = (t) => createHash("sha256").update(t).digest("hex");
 export async function hashPassword(password) {
   const salt = randomBytes(16).toString("hex");
@@ -145,7 +151,11 @@ function login(res, user) {
 }
 app.get("/api/health", (_req, res) => {
   db.prepare("SELECT 1").get();
-  res.json({ status: "ok" });
+  res.json({
+    status: "ok",
+    buildSha: process.env.BUILD_SHA || null,
+    version: process.env.RELEASE_VERSION || "development",
+  });
 });
 app.get("/api/me", (req, res) =>
   res.json({
@@ -268,6 +278,8 @@ async function photoBuffer(value) {
     throw new Error("INVALID_IMAGE");
   const raw = Buffer.from(value.split(",")[1], "base64");
   if (raw.length > 5 * 1024 * 1024) throw new Error("INVALID_IMAGE");
+  if (activePhotoJobs >= maxPhotoJobs) throw new Error("PHOTO_BUSY");
+  activePhotoJobs++;
   try {
     return await sharp(raw, { limitInputPixels: 25000000 })
       .rotate()
@@ -281,6 +293,8 @@ async function photoBuffer(value) {
       .toBuffer();
   } catch {
     throw new Error("INVALID_IMAGE");
+  } finally {
+    activePhotoJobs--;
   }
 }
 app.post("/api/entries", auth, async (req, res) => {
@@ -425,6 +439,8 @@ if (existsSync(resolve("dist/index.html"))) {
   app.get("/{*path}", (_req, res) => res.sendFile(resolve("dist/index.html")));
 }
 app.use((err, _req, res, _next) => {
+  if (err.message === "PHOTO_BUSY")
+    return res.status(429).set("Retry-After", "1").json({ error: "照片处理繁忙，请稍后再试" });
   if (err instanceof z.ZodError)
     return res
       .status(400)

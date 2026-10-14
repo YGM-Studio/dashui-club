@@ -1,5 +1,7 @@
 # 大水肌薄社区
 
+中国站 `club.1gemo.com` 的部署、停用与当前不启用备份的约定见 [中国站运维说明](deploy/CN.md)。
+
 一个可以部署在阿里云、腾讯云 Linux 服务器上的健身打卡与心得交流网站。前端 React + TypeScript + Vite，后端 Node.js + Express，数据库 SQLite。暖白与松绿色响应式界面，手机底部导航、桌面侧边导航。
 
 ## 已实现

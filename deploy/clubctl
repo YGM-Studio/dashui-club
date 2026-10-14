@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+[[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
+cd /srv/dashui-club
+exec 9>/run/lock/dashui-club-control.lock
+flock -n 9 || { echo 'Another club operation is running.' >&2; exit 1; }
+compose=(docker compose --project-name dashui-club --env-file .env -f compose.cn.yaml)
+switch_location() {
+    install -m 0644 "$1" active-location.conf.next
+    mv active-location.conf.next active-location.conf
+    nginx -t
+    systemctl reload nginx
+}
+case "${1:-status}" in
+    stop)
+        switch_location offline-location.conf
+        "${compose[@]}" stop app
+        echo 'Community stopped. Database and images are retained; no backup was created.'
+        ;;
+    start)
+        "${compose[@]}" up --no-build --pull never -d --wait app
+        curl --fail --silent --show-error http://127.0.0.1:3031/api/health
+        switch_location online-location.conf
+        ;;
+    status)
+        "${compose[@]}" ps -a
+        du -sh data
+        ;;
+    *) echo 'Usage: clubctl {status|stop|start}' >&2; exit 2 ;;
+esac

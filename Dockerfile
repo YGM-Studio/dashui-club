@@ -8,6 +8,12 @@ COPY public ./public
 RUN npm run build
 
 FROM node:24-bookworm-slim AS runtime
+ARG BUILD_SHA
+ARG RELEASE_VERSION
+LABEL org.opencontainers.image.source="https://github.com/YGM-Studio/dashui-club" \
+      org.opencontainers.image.revision=$BUILD_SHA \
+      org.opencontainers.image.version=$RELEASE_VERSION
+ENV BUILD_SHA=$BUILD_SHA RELEASE_VERSION=$RELEASE_VERSION
 ENV NODE_ENV=production PORT=3001 DB_PATH=/app/data/community.sqlite
 WORKDIR /app
 COPY package*.json ./

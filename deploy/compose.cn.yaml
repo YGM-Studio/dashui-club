@@ -1,0 +1,35 @@
+name: dashui-club
+services:
+  app:
+    image: ${CLUB_IMAGE:?Set CLUB_IMAGE to a verified Release image}
+    pull_policy: never
+    restart: unless-stopped
+    init: true
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1.0
+    pids_limit: 64
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      NODE_ENV: production
+      PORT: '3001'
+      APP_ORIGIN: https://club.1gemo.com
+      TRUST_PROXY: '1'
+      SEED_DEMO: 'false'
+      DB_PATH: /app/data/community.sqlite
+      PHOTO_CONCURRENCY: '2'
+      NODE_OPTIONS: --max-old-space-size=256
+    ports:
+      - '127.0.0.1:3031:3001'
+    volumes:
+      - /srv/dashui-club/data:/app/data
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+    stop_grace_period: 30s

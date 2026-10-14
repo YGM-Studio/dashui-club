@@ -1,0 +1,59 @@
+name: China release image
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag on main to package into a draft Release
+        required: true
+        type: string
+permissions:
+  contents: write
+concurrency:
+  group: china-release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - name: Verify tag is on main
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-cn\.[0-9]+$ ]]
+          git merge-base --is-ancestor HEAD origin/main
+          echo "BUILD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Validate application
+        run: npm ci --no-audit --no-fund && npm test && npm run build
+      - name: Build immutable amd64 runtime image
+        run: |
+          set -euo pipefail
+          IMAGE="dashui-club:sha-${BUILD_SHA}"
+          docker build --platform linux/amd64 --build-arg BUILD_SHA="$BUILD_SHA" --build-arg RELEASE_VERSION="$RELEASE_VERSION" -t "$IMAGE" .
+          docker image inspect "$IMAGE" --format '{{.Id}}' > image-id.txt
+          docker save "$IMAGE" | gzip -1 > dashui-club-linux-amd64.tar.gz
+          sha256sum dashui-club-linux-amd64.tar.gz > SHA256SUMS
+          python3 - <<'PY'
+          import json, os, pathlib
+          pathlib.Path('manifest.json').write_text(json.dumps({'buildSha':os.environ['BUILD_SHA'],'version':os.environ['RELEASE_VERSION'],'image':'dashui-club:sha-'+os.environ['BUILD_SHA'],'imageId':pathlib.Path('image-id.txt').read_text().strip(),'platform':'linux/amd64','upstreamSha':'270ca4662a89f9107b105a0b5f5535a507bcebec'},indent=2))
+          PY
+          tar -czf dashui-club-deploy-config.tar.gz deploy
+          sha256sum dashui-club-deploy-config.tar.gz manifest.json >> SHA256SUMS
+      - name: Upload draft Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" --verify-tag --draft --title "大水肌薄社区 ${RELEASE_VERSION}" --notes-file deploy/release-notes.md
+          gh release upload "$RELEASE_TAG" dashui-club-linux-amd64.tar.gz dashui-club-deploy-config.tar.gz manifest.json SHA256SUMS
