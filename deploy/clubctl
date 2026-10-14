@@ -11,16 +11,27 @@ switch_location() {
     nginx -t
     systemctl reload nginx
 }
+wait_status() {
+    for attempt in {1..30}; do
+        code=$(curl --noproxy '*' --resolve club.1gemo.com:443:127.0.0.1 --silent --output /dev/null --write-out '%{http_code}' "https://club.1gemo.com$2")
+        [[ "$code" == "$1" ]] && return 0
+        sleep 0.2
+    done
+    echo 'Nginx did not reach the expected state.' >&2
+    return 1
+}
 case "${1:-status}" in
     stop)
         switch_location offline-location.conf
+        wait_status 503 /
         "${compose[@]}" stop app
         echo 'Community stopped. Database and images are retained; no backup was created.'
         ;;
     start)
-        "${compose[@]}" up --no-build --pull never -d --wait app
+        "${compose[@]}" start --wait --wait-timeout 120 app
         curl --fail --silent --show-error http://127.0.0.1:3031/api/health
         switch_location online-location.conf
+        wait_status 200 /api/health
         ;;
     status)
         "${compose[@]}" ps -a

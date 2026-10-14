@@ -44,8 +44,13 @@ jobs:
           docker save "$IMAGE" | gzip -1 > dashui-club-linux-amd64.tar.gz
           sha256sum dashui-club-linux-amd64.tar.gz > SHA256SUMS
           python3 - <<'PY'
-          import json, os, pathlib
-          pathlib.Path('manifest.json').write_text(json.dumps({'buildSha':os.environ['BUILD_SHA'],'version':os.environ['RELEASE_VERSION'],'image':'dashui-club:sha-'+os.environ['BUILD_SHA'],'imageId':pathlib.Path('image-id.txt').read_text().strip(),'platform':'linux/amd64','upstreamSha':'270ca4662a89f9107b105a0b5f5535a507bcebec'},indent=2))
+          import hashlib, json, os, pathlib, tarfile
+          with tarfile.open('dashui-club-linux-amd64.tar.gz') as archive:
+              image=json.load(archive.extractfile('manifest.json'))[0]
+              raw=archive.extractfile(image['Config']).read()
+              config=json.loads(raw)
+          manifest={'buildSha':os.environ['BUILD_SHA'],'version':os.environ['RELEASE_VERSION'],'image':'dashui-club:sha-'+os.environ['BUILD_SHA'],'imageId':pathlib.Path('image-id.txt').read_text().strip(),'archiveConfigDigest':'sha256:'+hashlib.sha256(raw).hexdigest(),'rootfsDiffIds':config['rootfs']['diff_ids'],'runtimeConfigSha256':hashlib.sha256(json.dumps(config['config'],sort_keys=True,separators=(',',':')).encode()).hexdigest(),'platform':'linux/amd64','upstreamSha':'270ca4662a89f9107b105a0b5f5535a507bcebec'}
+          pathlib.Path('manifest.json').write_text(json.dumps(manifest,indent=2))
           PY
           tar -czf dashui-club-deploy-config.tar.gz deploy
           sha256sum dashui-club-deploy-config.tar.gz manifest.json >> SHA256SUMS
