@@ -20,6 +20,16 @@ wait_status() {
     echo 'Nginx did not reach the expected state.' >&2
     return 1
 }
+wait_local_health() {
+    for attempt in {1..60}; do
+        if curl --max-time 2 --fail --silent http://127.0.0.1:3031/api/health >/dev/null; then
+            return 0
+        fi
+        sleep 0.5
+    done
+    echo 'Application did not become healthy.' >&2
+    return 1
+}
 case "${1:-status}" in
     stop)
         switch_location offline-location.conf
@@ -28,7 +38,8 @@ case "${1:-status}" in
         echo 'Community stopped. Database and images are retained; no backup was created.'
         ;;
     start)
-        "${compose[@]}" start --wait --wait-timeout 120 app
+        "${compose[@]}" start app
+        wait_local_health
         curl --fail --silent --show-error http://127.0.0.1:3031/api/health
         switch_location online-location.conf
         wait_status 200 /api/health
